@@ -1,2 +1,1 @@
-# Time Series
- 
+In this project, I performed a Time Series analysis on Google Trend data of people who searched the keyword "free download" in Iran between 2015 and 2017. I wanted to investigate whether the ethics regarding copyright in Iran is improved or not.

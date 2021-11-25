@@ -1,0 +1,159 @@
+---
+title: "Time Series Analysis on Google Trend Data"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+```{r include=FALSE}
+VAR.MEAN<-function(DATA)
+{
+	MEAN<-mean(DATA)
+	n<-length(DATA)
+   L<-floor(sqrt(n))
+	OUT1<-acf(DATA,plot=F,type="cov")$acf[1:(L+1)]
+	VARMEAN<-round(((OUT1[1]+2*(sum(OUT1[2:(L+1)]*(1-seq(1:L)/L))))/n),4)
+	Z<-MEAN/sqrt(VARMEAN)
+
+	return(list(MEAN=MEAN,VARMEAN=VARMEAN,Z=Z))
+}
+```
+
+## Import Data and Required Libraries
+
+```{r echo=TRUE, warning=FALSE}
+library(ggplot2)
+library(forecast)
+library(tseries)
+library(gridExtra)
+library(TSA)
+df <- read.csv("C:/Users/Saberi/Desktop/df.csv")
+```
+
+## Introduction
+
+https://trends.google.com/
+
+## Be Friend With Data
+
+```{r}
+df$week<-as.Date(df$week,format="%m/%d/%Y")
+df$ml.ww<-as.numeric(df$y)
+theme_set(theme_bw())
+ggplot(data = df, aes(x = week, y = ml.ww))+
+  geom_line(color = "#00AFBB",size=1)
+```
+
+## Prove of not stationary
+
+```{r}
+adf.test(df$ml.ww)
+```
+
+## stablize the variance by box-cox transformation
+
+```{r}
+lambda<-BoxCox.lambda(df$ml.ww, method = c("guerrero", "loglik"), lower = -1, upper = 2)
+df$new.ml.ww<-BoxCox(df$ml.ww,lambda)
+ggplot(data = df, aes(x = week, y = new.ml.ww))+
+  geom_line(color = "#00AFBB",size=1)
+
+```
+### investigate the data after the variance stablizing
+```{r}
+ggtsdisplay(df$new.ml.ww,smooth = TRUE)
+```
+
+## degree of differentiating
+```{r warning=FALSE}
+df$temp<-c(0,diff(df$new.ml.ww))
+adf.test(df$temp)
+
+```
+```{r}
+ndiffs(df$ml.ww,alpha = 0.05,test = c("kpss", "adf", "pp")
+       ,type = c("level", "trend"),max.d = 5)
+```
+
+```{r}
+ggtsdisplay(df$temp,smooth = TRUE)
+```
+
+## finding a suitable model
+### search of q
+
+```{r}
+tethahat=acf(df$temp,20,type="correlation",plot = F)$acf
+tethahat
+
+```
+
+```{r}
+zscore1<-sqrt(263)*tethahat[1]/sqrt(1+2*(tethahat[1])^2)
+zscore1
+```
+
+
+```{r}
+zscore<-0
+for (i in 2:20){
+  zscore[i-1]=sqrt(263)*tethahat[i]/sqrt((1+2*sum(tethahat[1:(i-1)]^2)))
+  if(abs(zscore[i-1])> 1.96){
+    print(i)
+  }
+}
+
+```
+
+
+### search of p
+
+```{r}
+phihat=acf(df$temp,20,type="partial",plot = F)$acf
+phihat
+
+```
+
+
+```{r}
+zzscore<-0
+for (i in 1:20){
+  zzscore[i]=sqrt(263)*phihat[i]
+  if(abs(zzscore[i])>1.96){
+    print(i)
+  }
+    }
+```
+
+## search for arma candidates
+
+```{r}
+eacf(df$temp,ar.max = 7,ma.max = 7)
+```
+```{r}
+VAR.MEAN(df$temp)
+```
+no drift
+
+```{r}
+arima(df$temp,order = c(0,0,5))
+arima(df$temp,order = c(4,0,0))
+arima(df$temp,order = c(2,0,4))
+arima(df$temp,order = c(1,0,5))
+```
+### model validation
+```{r}
+fit<-arima(df$temp,order = c(2,0,4))
+```
+
+```{r}
+checkresiduals(fit)
+```
+```{r}
+tsdiag(fit)
+```
+
+
